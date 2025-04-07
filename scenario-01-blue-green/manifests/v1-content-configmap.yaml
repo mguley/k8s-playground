@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-content-v1
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Web App - Version 1</title>
+        <style>
+            body {
+                background-color: #3498db; /* Blue background */
+                color: white;
+                font-family: Arial, sans-serif;
+                text-align: center;
+                padding-top: 100px;
+            }
+        </style>
+    </head>
+    <body>
+      <h1>Version 1 (Blue)</h1>
+      <p>This is version 1 of our web application.</p>
+    </body>
+    </html>
