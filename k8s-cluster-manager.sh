@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# k8s-cluster-manager.sh - v1.0.0
+# k8s-cluster-manager.sh - v1.1.0
 # A helper script to manage Kubernetes clusters via kind.
 #
 # Prerequisites:
@@ -17,15 +17,17 @@
 #   ./k8s-cluster-manager.sh [command] [args]
 #
 # Commands:
-#   create [name] [nodes] [node_image]   Create a new kind cluster
-#   delete [name]                        Delete an existing kind cluster
-#   list                                 List all kind clusters
-#   status [name]                        Show nodes, pods & services of a cluster
-#   use [name]                           Switch kubectl context to a cluster
-#   kubeconfig [name]                    Print the kubeconfig for a cluster
-#   contexts                             List all kubectl contexts
-#   version                              Show script, kind & kubectl versions
-#   help                                 Display this help text
+#   create [name] [nodes] [node_image] [deploy-metrics]   Create a new kind cluster
+#                                                         Use "deploy-metrics" as 4th param to install metrics-server
+#   delete [name]                                         Delete an existing kind cluster
+#   list                                                  List all kind clusters
+#   status [name]                                         Show nodes, pods & services of a cluster
+#   use [name]                                            Switch kubectl context to a cluster
+#   kubeconfig [name]                                     Print the kubeconfig for a cluster
+#   contexts                                              List all kubectl contexts
+#   install-metrics [name]                                Install metrics-server on an existing cluster
+#   version                                               Show script, kind & kubectl versions
+#   help                                                  Display this help text
 #
 # Examples:
 #   # Create a 3‑node cluster named "dev-cluster"
@@ -33,6 +35,12 @@
 #
 #   # Create a single‑node cluster using a specific node image
 #   ./k8s-cluster-manager.sh create test 1 kindest/node:v1.24.0
+#
+#   # Create a cluster with metrics-server installed
+#   ./k8s-cluster-manager.sh create prod 3 kindest/node:v1.31.2 deploy-metrics
+#
+#   # Install metrics-server on an existing cluster
+#   ./k8s-cluster-manager.sh install-metrics dev-cluster
 #
 #   # List clusters
 #   ./k8s-cluster-manager.sh list
@@ -58,7 +66,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.1.0"
 DEFAULT_CLUSTER_NAME="k8s-cluster"
 
 # ANSI color codes
@@ -102,13 +110,64 @@ check_kubectl() {
 }
 
 #------------------------------------------------------------------------------
+# Install the Metrics Server on a cluster
+#   args: [cluster_name]
+#------------------------------------------------------------------------------
+install_metrics_server() {
+    local name="${1:-$DEFAULT_CLUSTER_NAME}"
+
+    echo -e "${BLUE}→ Installing Metrics Server on cluster '${name}'...${NC}"
+
+    # Check if the cluster exists
+    if ! kind get clusters | grep -q "^${name}$"; then
+        echo -e "${RED}✖ Cluster '${name}' not found.${NC}"
+        echo "Use 'kind get clusters' to list existing clusters."
+        exit 1
+    fi
+
+    # Switch kubectl context to the cluster
+    kubectl config use-context "kind-${name}" &> /dev/null
+
+    # Check if metrics-server is already installed
+    if kubectl get deployment metrics-server -n kube-system &> /dev/null; then
+        echo -e "${YELLOW}⚠ Metrics Server is already installed on cluster '${name}'.${NC}"
+        return 0
+    fi
+
+    echo -e "${BLUE}→ Deploying Metrics Server...${NC}"
+    if kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml; then
+        echo -e "${GREEN}✔ Metrics Server deployment initiated.${NC}"
+
+        echo -e "${BLUE}→ Patching Metrics Server to work with self-signed certificates...${NC}"
+        kubectl patch -n kube-system deployment metrics-server --type='json' \
+            -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+
+        echo -e "${BLUE}→ Waiting for Metrics Server to start...${NC}"
+        sleep 10
+
+        # Check if metrics-server pod is running
+        if kubectl get pods -n kube-system -l k8s-app=metrics-server | grep -q "Running"; then
+            echo -e "${GREEN}✔ Metrics Server successfully installed and running.${NC}"
+            kubectl get pods -n kube-system -l k8s-app=metrics-server
+        else
+            echo -e "${YELLOW}⚠ Metrics Server pods are not yet running. Check status with:${NC}"
+            echo "kubectl get pods -n kube-system -l k8s-app=metrics-server"
+        fi
+    else
+        echo -e "${RED}✖ Failed to deploy Metrics Server.${NC}"
+        return 1
+    fi
+}
+
+#------------------------------------------------------------------------------
 # Create a kind cluster
-#   args: [cluster_name] [node_count] [node_image (optional)]
+#   args: [cluster_name] [node_count] [node_image (optional)] [deploy-metrics (optional)]
 #------------------------------------------------------------------------------
 create_cluster() {
     local name="${1:-$DEFAULT_CLUSTER_NAME}"
     local nodes="${2:-1}"
     local image="${3:-}"
+    local deploy_metrics="${4:-}"
 
     echo -e "${BLUE}→ Creating kind cluster '${name}' with ${nodes} node(s)...${NC}"
 
@@ -146,12 +205,17 @@ EOF
 
         echo -e "${BLUE}→ Nodes:${NC}"
         kubectl get nodes
+
+        # Deploy metrics-server if requested
+        if [ "$deploy_metrics" = "deploy-metrics" ]; then
+            install_metrics_server "$name"
+        fi
     else
         echo -e "${RED}✖ Failed to create cluster '${name}'.${NC}"
         exit 1
     fi
 
-    # Clear the EXIT trap so we don’t delete other temp files later
+    # Clear the EXIT trap so we don't delete other temp files later
     trap - EXIT
 }
 
@@ -192,9 +256,30 @@ cluster_status() {
         echo -e "${GREEN}✔ Cluster '${name}' exists.${NC}"
 
         kubectl config use-context "kind-${name}" &> /dev/null
-        echo -e "${BLUE}→ Nodes:${NC}";   kubectl get nodes
-        echo -e "${BLUE}→ Pods (all ns):${NC}";   kubectl get pods --all-namespaces
-        echo -e "${BLUE}→ Services (all ns):${NC}"; kubectl get svc --all-namespaces
+
+        echo -e "${BLUE}→ Nodes:${NC}"
+        kubectl get nodes
+
+        echo -e "${BLUE}→ Pods (all ns):${NC}"
+        kubectl get pods --all-namespaces
+
+        echo -e "${BLUE}→ Services (all ns):${NC}"
+        kubectl get svc --all-namespaces
+
+        # Check if metrics-server is installed
+        if kubectl get deployment metrics-server -n kube-system &> /dev/null; then
+            echo -e "${BLUE}→ Metrics Server:${NC} ${GREEN}Installed${NC}"
+
+            # Check if metrics API is available
+            if kubectl get --raw "/apis/metrics.k8s.io/v1beta1/nodes" &> /dev/null; then
+                echo -e "${BLUE}→ Metrics API:${NC} ${GREEN}Available${NC}"
+            else
+                echo -e "${BLUE}→ Metrics API:${NC} ${YELLOW}Not yet available${NC}"
+            fi
+        else
+            echo -e "${BLUE}→ Metrics Server:${NC} ${YELLOW}Not installed${NC}"
+            echo "  Run './$(basename "$0") install-metrics $name' to install"
+        fi
     else
         echo -e "${YELLOW}⚠ Cluster '${name}' not found.${NC}"
         exit 1
@@ -242,7 +327,7 @@ version() {
 # Display help / usage information
 #------------------------------------------------------------------------------
 show_help() {
-    sed -n '1,57p' "$0"
+    sed -n '1,65p' "$0"
 }
 
 #––– Main ---------------------------------------------------------------------
@@ -255,15 +340,16 @@ check_kubectl
 # Dispatch
 cmd="${1:-help}"; shift || true
 case "$cmd" in
-  create)      create_cluster   "$@" ;;
-  delete)      delete_cluster   "$@" ;;
-  list)        list_clusters    ;;
-  status)      cluster_status   "$@" ;;
-  use)         use_context      "$@" ;;
-  kubeconfig)  get_kubeconfig   "$@" ;;
-  contexts)    list_contexts    ;;
-  version)     version          ;;
-  help|--help) show_help        ;;
+  create)          create_cluster       "$@" ;;
+  delete)          delete_cluster       "$@" ;;
+  list)            list_clusters        ;;
+  status)          cluster_status       "$@" ;;
+  use)             use_context          "$@" ;;
+  kubeconfig)      get_kubeconfig       "$@" ;;
+  contexts)        list_contexts        ;;
+  install-metrics) install_metrics_server "$@" ;;
+  version)         version              ;;
+  help|--help)     show_help            ;;
   *) echo -e "${RED}Unknown command: $cmd${NC}" >&2; show_help; exit 1 ;;
 esac
 
