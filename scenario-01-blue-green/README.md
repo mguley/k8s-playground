@@ -1,3 +1,24 @@
+#### Table of Contents
+
+- [Introduction](#introduction)
+- [What is Blue-Green Deployment?](#what-is-blue-green-deployment)
+- [Step 1: Setting Up the Cluster](#step-1-setting-up-the-cluster)
+- [Step 2: Create the Version 1 (Blue) Deployment](#step-2-create-the-version-1-blue-deployment)
+- [Step 3: Create a Service to Expose the Application](#step-3-create-a-service-to-expose-the-application)
+- [Step 4: Testing the V1 (Blue) Application](#step-4-testing-the-v1-blue-application)
+- [Step 5: Create the Version 2 (Green) Deployment](#step-5-create-the-version-2-green-deployment)
+- [Step 6: Verify Both Versions are Running](#step-6-verify-both-versions-are-running)
+- [Step 7: Test the Green Deployment Before Switching](#step-7-test-the-green-deployment-before-switching)
+- [Step 8: Switch Traffic to the Green Deployment](#step-8-switch-traffic-to-the-green-deployment)
+- [Step 9: Verify the Switch Was Successful](#step-9-verify-the-switch-was-successful)
+- [Step 10: Clean Up After Successful Deployment](#step-10-clean-up-after-successful-deployment)
+- [Step 11: Rollback Scenario (Optional)](#step-11-rollback-scenario-optional)
+- [Cleanup](#cleanup)
+- [Understanding What Happened Under the Hood](#understanding-what-happened-under-the-hood)
+
+---
+#### Introduction
+
 We'll simulate a real-world situation where a web development team needs to update their application without any
 downtime for users.
 
