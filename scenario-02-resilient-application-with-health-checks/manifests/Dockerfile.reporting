@@ -1,0 +1,8 @@
+FROM nginx:alpine
+
+RUN apk add --no-cache bc gawk
+
+COPY simulate.sh /usr/local/bin/simulate.sh
+RUN chmod +x /usr/local/bin/simulate.sh
+
+ENTRYPOINT ["/usr/local/bin/simulate.sh"]

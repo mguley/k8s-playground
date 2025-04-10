@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-generator-ab
+  namespace: finance
+spec:
+  template:
+    spec:
+      containers:
+        - name: load-generator-ab
+          # Use an image that has ApacheBench installed (for instance, a custom image or one from docker hub)
+          image: jordi/ab
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Starting load test using ApacheBench..."
+              # -n: total number of requests (set high if using -t),
+              # -c: concurrency level, and
+              # -t: test duration in seconds.
+              ab -n 1000000 -c 200 -t 300 http://finance-app.finance.svc.cluster.local/
+              echo "Load test complete."
+      restartPolicy: Never
+  backoffLimit: 4

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: failing-app-config
+  namespace: finance
+data:
+  STARTUP_DELAY_SEC: "5"
+  FAILURE_RATE: "0.3"                   # 30% chance of liveness failures
+  LIVENESS_FAILURE_DURATION: "20"       # How long liveness failures last (seconds)
+  READINESS_FAILURE_DURATION: "15"      # How long readiness failures last (seconds)
+  READINESS_FAILURE_RATE: "0.15"        # 15% chance of readiness failures (separate from liveness)
+  SIMULATE_RESOURCE_EXHAUSTION: "false"
