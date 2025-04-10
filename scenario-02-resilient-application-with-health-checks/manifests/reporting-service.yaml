@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: web-app-v2-test
+  name: reporting-service
+  namespace: finance
 spec:
   selector:
-    app: web-app
-    version: v2
+    app: reporting-service
   ports:
     - port: 80
       targetPort: 80
-  type: NodePort
+  type: ClusterIP

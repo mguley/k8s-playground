@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finance-app-config
+  namespace: finance
+data:
+  APP_MODE: "production"
+  RESPONSE_DELAY_MS: "100"
+  STARTUP_DELAY_SEC: "10"
+  FAILURE_RATE: "0.0"  # Probability of simulated failure (0.0 - 1.0)

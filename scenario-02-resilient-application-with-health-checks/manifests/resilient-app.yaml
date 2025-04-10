@@ -1,0 +1,229 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finance-app
+  namespace: finance
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: finance-app
+  template:
+    metadata:
+      labels:
+        app: finance-app
+    spec:
+      containers:
+        - name: finance-app
+          image: nginx:alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Create a simple web server that simulates a financial application
+              mkdir -p /usr/share/nginx/html/health /usr/share/nginx/html/ready /usr/share/nginx/html/startup
+              
+              # Create index.html
+              cat > /usr/share/nginx/html/index.html << 'EOL'
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Financial Services Dashboard</title>
+                <style>
+                  body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f0f2f5;
+                  }
+                  .dashboard {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    background-color: #fff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                  }
+                  header {
+                    background-color: #0066b2;
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px 8px 0 0;
+                    margin: -20px -20px 20px;
+                  }
+                  h1 {
+                    margin: 0;
+                  }
+                  .status {
+                    padding: 15px;
+                    border-radius: 4px;
+                    margin-bottom: 15px;
+                    background-color: #d4edda;
+                    border: 1px solid #c3e6cb;
+                    color: #155724;
+                  }
+                  .metrics {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 20px;
+                    margin-bottom: 20px;
+                  }
+                  .metric-card {
+                    flex: 1;
+                    min-width: 200px;
+                    padding: 15px;
+                    background-color: #e9ecef;
+                    border-radius: 4px;
+                    text-align: center;
+                  }
+                  .metric-value {
+                    font-size: 24px;
+                    font-weight: bold;
+                    margin: 10px 0;
+                    color: #0066b2;
+                  }
+                  .container-info {
+                    font-family: monospace;
+                    background-color: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 4px;
+                    margin-top: 20px;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="dashboard">
+                  <header>
+                    <h1>Financial Services Dashboard</h1>
+                  </header>
+              
+                  <div class="status">
+                    System Status: <strong>Operational</strong>
+                  </div>
+              
+                  <div class="metrics">
+                    <div class="metric-card">
+                      <div>Transactions Processed</div>
+                      <div class="metric-value">28,745</div>
+                      <div>Today</div>
+                    </div>
+                    <div class="metric-card">
+                      <div>System Uptime</div>
+                      <div class="metric-value">99.99%</div>
+                      <div>Last 30 days</div>
+                    </div>
+                    <div class="metric-card">
+                      <div>Response Time</div>
+                      <div class="metric-value">142 ms</div>
+                      <div>Average</div>
+                    </div>
+                  </div>
+              
+                  <div class="container-info">
+                    <p>Container ID: <span id="hostname">loading...</span></p>
+                    <p>Pod IP: <span id="ip">loading...</span></p>
+                    <p>Started at: <span id="startTime">loading...</span></p>
+                  </div>
+                </div>
+              
+                <script>
+                  // Fill in container information
+                  document.getElementById('hostname').textContent = location.hostname;
+                  document.getElementById('startTime').textContent = new Date().toISOString();
+              
+                  // Fetch the IP address
+                  fetch('/ip')
+                    .then(response => response.text())
+                    .then(ip => {
+                      document.getElementById('ip').textContent = ip;
+                    })
+                    .catch(error => {
+                      document.getElementById('ip').textContent = 'Error fetching IP';
+                    });
+                </script>
+              </body>
+              </html>
+              EOL
+              
+              # Create a readiness probe endpoint
+              cat > /usr/share/nginx/html/ready/index.html << 'EOL'
+              OK
+              EOL
+              
+              # Create a liveness probe endpoint
+              cat > /usr/share/nginx/html/health/index.html << 'EOL'
+              OK
+              EOL
+              
+              # Start a background process to simulate application startup
+              echo "Simulating application startup - will take ${STARTUP_DELAY_SEC} seconds..."
+              (
+                sleep "${STARTUP_DELAY_SEC}"
+                echo "Application started, creating startup probe endpoint"
+                mkdir -p /usr/share/nginx/html/startup
+                echo "OK" > /usr/share/nginx/html/startup/index.html
+              ) &
+              
+              # Start a monitoring process to simulate occasional failures if FAILURE_RATE > 0
+              (
+                while true; do
+                  if [ $(echo "scale=2; ${FAILURE_RATE} > 0" | bc -l) -eq 1 ]; then
+                    # Generate a random number between 0 and 1
+                    RANDOM_VALUE=$(awk -v min=0 -v max=1 'BEGIN{srand(); print min+rand()*(max-min)}')
+              
+                    # If random value is less than FAILURE_RATE, simulate a failure
+                    if [ $(echo "scale=2; ${RANDOM_VALUE} < ${FAILURE_RATE}" | bc -l) -eq 1 ]; then
+                      echo "Simulating a failure for the liveness probe"
+                      echo "ERROR" > /usr/share/nginx/html/health/index.html
+                      sleep 5
+                      echo "Restoring health endpoint"
+                      echo "OK" > /usr/share/nginx/html/health/index.html
+                    fi
+                  fi
+                  sleep 30
+                done
+              ) &
+              
+              # Start nginx in the foreground
+              nginx -g "daemon off;"
+          ports:
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: finance-app-config
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+
+          # Check if the application is alive
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+
+          # Check if the application is ready to serve traffic
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+            successThreshold: 1
+
+          # Check if the application has finished startup
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 80
+            failureThreshold: 30  # Allow up to 5 minutes (30 * 10s) for startup
+            periodSeconds: 10
