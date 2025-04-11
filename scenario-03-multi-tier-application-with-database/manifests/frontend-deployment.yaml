@@ -1,0 +1,157 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nginx:alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo 'Creating frontend app...'
+              mkdir -p /usr/share/nginx/html
+              
+              # Create index.html
+              cat > /usr/share/nginx/html/index.html << 'EOL'
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>E-Commerce Store</title>
+                <style>
+                  body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                  }
+                  header {
+                    background-color: #4CAF50;
+                    color: white;
+                    text-align: center;
+                    padding: 1em;
+                    margin-bottom: 20px;
+                    border-radius: 5px;
+                  }
+                  .product {
+                    border: 1px solid #ddd;
+                    padding: 15px;
+                    margin-bottom: 15px;
+                    border-radius: 5px;
+                  }
+                  .product h3 {
+                    margin-top: 0;
+                    color: #333;
+                  }
+                  .price {
+                    font-weight: bold;
+                    color: #4CAF50;
+                    font-size: 1.2em;
+                  }
+                  .stock {
+                    color: #666;
+                    font-size: 0.9em;
+                  }
+                  .loading {
+                    text-align: center;
+                    color: #666;
+                    font-style: italic;
+                  }
+                  .error {
+                    color: red;
+                    border: 1px solid red;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 15px;
+                  }
+                </style>
+              </head>
+              <body>
+                <header>
+                  <h1>E-Commerce Product Catalog</h1>
+                  <p>Kubernetes Multi-tier Application Demo</p>
+                </header>
+              
+                <div id="products-container">
+                  <p class="loading">Loading products...</p>
+                </div>
+              
+                <script>
+                  // The API_URL will be updated by the startup script
+                  const API_URL = '';
+              
+                  async function fetchProducts() {
+                    try {
+                      const response = await fetch(`${API_URL}/api/products`);
+              
+                      if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                      }
+              
+                      const products = await response.json();
+                      displayProducts(products);
+                    } catch (error) {
+                      console.error('Error fetching products:', error);
+                      document.getElementById('products-container').innerHTML = `
+                        <div class="error">
+                          <p>Error loading products. Please try again later.</p>
+                          <p>Error details: ${error.message}</p>
+                        </div>
+                      `;
+                    }
+                  }
+              
+                  function displayProducts(products) {
+                    const container = document.getElementById('products-container');
+              
+                    if (products.length === 0) {
+                      container.innerHTML = '<p>No products available.</p>';
+                      return;
+                    }
+              
+                    const productsHTML = products.map(product => `
+                      <div class="product">
+                        <h3>${product.name}</h3>
+                        <p>${product.description}</p>
+                        <p class="price">$${parseFloat(product.price).toFixed(2)}</p>
+                        <p class="stock">In stock: ${product.stock}</p>
+                      </div>
+                    `).join('');
+              
+                    container.innerHTML = productsHTML;
+                  }
+              
+                  // Fetch products when the page loads
+                  window.addEventListener('DOMContentLoaded', fetchProducts);
+                </script>
+              </body>
+              </html>
+              EOL
+              
+              # Replace API_BACKEND_SERVICE with the actual service URL
+              sed -i "s|http://API_BACKEND_SERVICE|http://ecommerce.local|g" /usr/share/nginx/html/index.html
+              
+              # Start nginx
+              nginx -g "daemon off;"
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"

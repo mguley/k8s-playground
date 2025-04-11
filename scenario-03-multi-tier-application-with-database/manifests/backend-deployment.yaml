@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-backend
+  namespace: ecommerce
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-backend
+  template:
+    metadata:
+      labels:
+        app: api-backend
+    spec:
+      containers:
+        - name: api-backend
+          image: node:16-alpine
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo 'Creating API server...'
+              mkdir -p /app
+              cd /app
+              
+              # Create package.json
+              cat > package.json << 'EOL'
+              {
+                "name": "ecommerce-api",
+                "version": "1.0.0",
+                "description": "Simple API for e-commerce",
+                "main": "server.js",
+                "dependencies": {
+                  "express": "^4.17.1",
+                  "pg": "^8.7.1",
+                  "cors": "^2.8.5"
+                }
+              }
+              EOL
+              
+              # Create server.js
+              cat > server.js << 'EOL'
+              const express = require('express');
+              const { Pool } = require('pg');
+              const cors = require('cors');
+              
+              const app = express();
+              const port = 3000;
+              
+              app.use(cors());
+              app.use(express.json());
+              
+              // Create PostgreSQL connection pool
+              const pool = new Pool({
+                user: process.env.POSTGRES_USER,
+                host: process.env.POSTGRES_HOST,
+                database: process.env.POSTGRES_DB,
+                password: process.env.POSTGRES_PASSWORD,
+                port: 5432,
+              });
+              
+              // Health check endpoint
+              app.get('/health', (req, res) => {
+                res.json({ status: 'healthy' });
+              });
+              
+              // Get all products
+              app.get('/api/products', async (req, res) => {
+                try {
+                  const result = await pool.query('SELECT * FROM products');
+                  res.json(result.rows);
+                } catch (err) {
+                  console.error('Database error:', err);
+                  res.status(500).json({ error: 'Database error' });
+                }
+              });
+              
+              // Get a single product by ID
+              app.get('/api/products/:id', async (req, res) => {
+                try {
+                  const { id } = req.params;
+                  const result = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+              
+                  if (result.rows.length === 0) {
+                    return res.status(404).json({ error: 'Product not found' });
+                  }
+              
+                  res.json(result.rows[0]);
+                } catch (err) {
+                  console.error('Database error:', err);
+                  res.status(500).json({ error: 'Database error' });
+                }
+              });
+              
+              app.listen(port, () => {
+                console.log(`API server running on port ${port}`);
+              });
+              EOL
+              
+              # Install dependencies and start server
+              npm install
+              node server.js
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"

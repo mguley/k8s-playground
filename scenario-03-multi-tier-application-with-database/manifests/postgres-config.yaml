@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: ecommerce
+data:
+  POSTGRES_DB: "ecommercedb"
+  POSTGRES_USER: "ecommerceuser"
+  POSTGRES_PASSWORD: "ecommercepass"  # In a real scenario, use Secrets for passwords
+  POSTGRES_HOST: "postgres-0.postgres-headless"
