@@ -1,18 +1,17 @@
 ## Kubernetes Playground
 
-A hands-on learning environment for Kubernetes deployment strategies and resilience patterns. 
+A hands-on learning environment for Kubernetes deployment strategies and resilience patterns.
 This repository contains practical scenarios that demonstrate real-world Kubernetes concepts through guided exercises.
 
 ## Overview
 
-This playground is designed to help you learn Kubernetes concepts by doing. 
-Each scenario focuses on a specific pattern or technique used in production Kubernetes environments. 
+This playground is designed to help you learn Kubernetes concepts by doing.
+Each scenario focuses on a specific pattern or technique used in production Kubernetes environments.
 The scenarios are self-contained and include step-by-step instructions, manifest files, and explanations.
 
 ## Prerequisites
 
 Before starting, ensure you have the following installed:
-
 - [Docker](https://docs.docker.com/get-docker/)
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/) (Kubernetes in Docker)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
@@ -37,7 +36,7 @@ chmod +x k8s-cluster-manager.sh
 
 ### [Scenario 1: Blue-Green Deployment](./scenario-01-blue-green/)
 
-Learn how to implement zero-downtime deployments using the blue-green deployment strategy. 
+Learn how to implement zero-downtime deployments using the blue-green deployment strategy.
 This scenario simulates a real-world situation where a web application needs to be updated without any service interruption.
 
 To begin this scenario:
@@ -47,12 +46,22 @@ cd scenario-01-blue-green
 
 ### [Scenario 2: Resilient Applications with Health Checks](./scenario-02-resilient-application-with-health-checks/)
 
-Explore how to build self-healing applications in Kubernetes using various health check mechanisms. 
+Explore how to build self-healing applications in Kubernetes using various health check mechanisms.
 This scenario demonstrates a financial services application that can automatically recover from failures.
 
 To begin this scenario:
 ```bash
 cd scenario-02-resilient-application-with-health-checks
+```
+
+### [Scenario 3: Multi-tier Application with Database](./scenario-03-multi-tier-application-with-database/)
+
+Build a complete multi-tier application with database, backend API, and frontend components.
+This scenario demonstrates how to structure and connect different application layers in Kubernetes using a practical e-commerce platform example.
+
+To begin this scenario:
+```bash
+cd scenario-03-multi-tier-application-with-database
 ```
 
 ## Using the Cluster Manager
@@ -85,4 +94,4 @@ Contributions to add new scenarios or improve existing ones are welcome! To cont
 
 ---
 
-Happy learning! Kubernetes is a powerful system with many concepts to master. 
+Happy learning! Kubernetes is a powerful system with many concepts to master.
