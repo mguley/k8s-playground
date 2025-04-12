@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: healthcare-db
+  namespace: healthcare
+  labels:
+    app: healthcare-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: healthcare-db
+  template:
+    metadata:
+      labels:
+        app: healthcare-db
+    spec:
+      securityContext:
+        fsGroup: 999  # PostgreSQL group
+      containers:
+        - name: postgres
+          image: postgres:13
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-db-credentials
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-db-credentials
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: healthcare-db-credentials
+                  key: database
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: db-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: healthcare-db
+  namespace: healthcare
+spec:
+  selector:
+    app: healthcare-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP

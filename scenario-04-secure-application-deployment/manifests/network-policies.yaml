@@ -1,0 +1,67 @@
+# Allow the healthcare app to access only the healthcare database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: healthcare-app-to-db
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: healthcare-app
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: healthcare-db
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+---
+# Restrict database to only accept connections from the healthcare app
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-from-healthcare-app
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: healthcare-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: healthcare-app
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Allow healthcare app to be accessible only on HTTPS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: healthcare-app-https-only
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: healthcare-app
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 443

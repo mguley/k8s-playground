@@ -1,0 +1,80 @@
+# Role for read-only access to healthcare resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: healthcare-viewer
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+---
+# Role for managing healthcare pods (but not secrets)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: healthcare-operator
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+---
+# Role for full access to healthcare namespace (including secrets)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: healthcare-admin
+  namespace: healthcare
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+# Role binding for a hypothetical viewer user
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: healthcare-viewer-binding
+  namespace: healthcare
+subjects:
+  - kind: User
+    name: viewer@example.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: healthcare-viewer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role binding for a hypothetical operator user
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: healthcare-operator-binding
+  namespace: healthcare
+subjects:
+  - kind: User
+    name: operator@example.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: healthcare-operator
+  apiGroup: rbac.authorization.k8s.io
+---
+# Role binding for a hypothetical admin user
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: healthcare-admin-binding
+  namespace: healthcare
+subjects:
+  - kind: User
+    name: admin@example.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: healthcare-admin
+  apiGroup: rbac.authorization.k8s.io

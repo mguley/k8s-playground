@@ -64,6 +64,15 @@ To begin this scenario:
 cd scenario-03-multi-tier-application-with-database
 ```
 
+### [Scenario 4: Secure Application Deployment](./scenario-04-secure-application-deployment/)
+Implement a healthcare application with multiple layers of security using Kubernetes security features.
+This scenario demonstrates how to apply security best practices including namespace isolation, secrets management, network policies, RBAC, and TLS encryption.
+
+To begin this scenario:
+```bash
+cd scenario-04-secure-application-deployment
+```
+
 ## Using the Cluster Manager
 
 The included `k8s-cluster-manager.sh` script simplifies cluster management operations:
