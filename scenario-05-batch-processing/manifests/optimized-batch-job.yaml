@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: optimized-batch-job
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      priorityClassName: batch-priority
+      containers:
+        - name: batch-processor
+          image: python:3.9-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting optimized batch job..."
+              echo "Installing required system dependencies..."
+              apk add --no-cache build-base
+              
+              echo "Installing Python packages with detailed output..."
+              pip install numpy --verbose
+              
+              echo "NumPy installation completed. Starting Python script..."
+              
+              # Simulate a memory-intensive operation that varies in usage
+              python -c '
+              import sys
+              import numpy as np
+              import time
+              import os
+              
+              # Force unbuffered output
+              sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, "reconfigure") else None
+              # Alternative flush approach for older Python versions
+              print = lambda *args, **kwargs: __builtins__.print(*args, **kwargs, flush=True)
+              
+              try:
+                  print("Running memory-adaptive batch process")
+              
+                  # Simulate a job that scales its memory usage based on available resources
+                  # In a real scenario, you might check cgroup limits or use resource estimation
+              
+                  # Start with a small array
+                  print("Starting with minimal memory usage")
+                  data = np.ones((1000, 1000), dtype=np.float32)
+                  print(f"Initial memory usage: {data.nbytes / (1024 * 1024):.2f} MB")
+              
+                  # Gradually increase if we have enough memory
+                  max_iterations = 20
+                  for i in range(max_iterations):
+                      print(f"Processing batch {i+1}/{max_iterations}")
+              
+                      # Simulate CPU-intensive work
+                      t_start = time.time()
+                      for _ in range(3):
+                          # Matrix operations are CPU-intensive
+                          result = np.matmul(data, data)
+                      t_end = time.time()
+              
+                      print(f"Batch {i+1} completed in {t_end - t_start:.2f} seconds")
+              
+                      # For this demo, limit our growth to stay within container limits
+                      if i < 5:
+                          current_size = data.shape[0]
+                          new_size = min(current_size + 1000, 8000)
+                          print(f"Increasing working set size: {current_size} -> {new_size}")
+                          data = np.ones((new_size, new_size), dtype=np.float32)
+                          print(f"New memory usage: {data.nbytes / (1024 * 1024):.2f} MB")
+              
+                      # Sleep between batches to simulate I/O or other waiting
+                      time.sleep(1)
+              
+                  print("Optimized batch job completed successfully!")
+              except Exception as e:
+                  print(f"ERROR: Script failed with exception: {str(e)}")
+                  import traceback
+                  traceback.print_exc()
+                  sys.exit(1)
+              '
+              
+              echo "Python script execution completed."
+          resources:
+            # Request modest CPU but allow bursting
+            requests:
+              memory: "512Mi"  # Request what we know we'll need
+              cpu: "200m"      # Low CPU request for better scheduling
+            limits:
+              memory: "1Gi"    # Hard limit to protect the cluster
+              cpu: "2"         # Allow high CPU usage when available
+      restartPolicy: OnFailure

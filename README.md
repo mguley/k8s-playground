@@ -73,6 +73,15 @@ To begin this scenario:
 cd scenario-04-secure-application-deployment
 ```
 
+### [Scenario 5: Batch Processing in Kubernetes](./scenario-05-batch-processing/)
+Implement scheduled jobs and batch processing workflows in Kubernetes using Jobs and CronJobs.
+This scenario demonstrates how a data analytics company can perform regular data processing tasks on schedule and handle ad-hoc batch workloads efficiently.
+
+To begin this scenario:
+```bash
+cd scenario-05-batch-processing
+```
+
 ## Using the Cluster Manager
 
 The included `k8s-cluster-manager.sh` script simplifies cluster management operations:

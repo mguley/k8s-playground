@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: parallel-processor
+  labels:
+    app: parallel-processor
+spec:
+  completions: 5  # Need 5 successful completions
+  parallelism: 3  # Run up to 3 pods in parallel
+  backoffLimit: 2
+  template:
+    spec:
+      containers:
+        - name: processor
+          image: python:3.9-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Get pod info for the record
+              POD_NAME=$HOSTNAME
+              echo "Starting processing on pod $POD_NAME"
+              
+              # Generate a random processing time to simulate different workloads
+              PROCESS_TIME=$((RANDOM % 20 + 5))
+              echo "This task will take approximately $PROCESS_TIME seconds"
+              
+              # Simulate processing
+              for i in $(seq 1 $PROCESS_TIME); do
+                echo "Processing: $i/$PROCESS_TIME"
+                sleep 1
+              done
+              
+              # Return success most of the time
+              if [ $((RANDOM % 10)) -lt 9 ]; then
+                echo "Processing completed successfully on $POD_NAME"
+                exit 0
+              else
+                echo "Simulating a failure on $POD_NAME"
+                exit 1
+              fi
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      restartPolicy: OnFailure

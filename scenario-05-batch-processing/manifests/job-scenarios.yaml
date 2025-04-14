@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-test-scenarios
+spec:
+  parallelism: 4
+  completions: 4
+  backoffLimit: 6
+  template:
+    spec:
+      containers:
+        - name: test-scenarios
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Get a predictable scenario number based on a hash of the pod name
+              POD_NAME=$HOSTNAME
+              HASH_VALUE=$(echo $POD_NAME | md5sum | tr -cd '0-9' | cut -c 1-2)
+              SCENARIO=$((HASH_VALUE % 4 + 1))
+              
+              echo "Starting pod $POD_NAME (assigned scenario: $SCENARIO)"
+              
+              # Different scenarios based on calculated scenario number
+              case $SCENARIO in
+                1)
+                  echo "Scenario 1: Fast success"
+                  sleep 5
+                  echo "Completed successfully"
+                  exit 0
+                  ;;
+                2)
+                  echo "Scenario 2: Success after delay"
+                  sleep 30
+                  echo "Completed successfully after delay"
+                  exit 0
+                  ;;
+                3)
+                  # For retry scenario, use the restart count from the downward API
+                  # This is approximated here by checking if the job has been running awhile
+                  STARTUP_TIME=$(date +%s)
+                  if [ "$STARTUP_TIME" -gt 1744563600 ]; then
+                    echo "This is a retry attempt, succeeding this time"
+                    sleep 10
+                    echo "Completed successfully after previous failure"
+                    exit 0
+                  else
+                    echo "Simulating a failure on first attempt"
+                    sleep 15
+                    exit 1
+                  fi
+                  ;;
+                4)
+                  echo "Scenario 4: Resource exhaustion simulation"
+                  echo "Allocating memory until limit is reached..."
+              
+                  # For simulation, just exit with an error
+                  sleep 20
+                  echo "Simulating resource exhaustion failure"
+                  exit 2
+                  ;;
+              esac
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      restartPolicy: OnFailure

@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: data-processor-TIMESTAMP
+  labels:
+    app: data-processor
+    type: ad-hoc
+spec:
+  backoffLimit: 3
+  completions: 1
+  template:
+    spec:
+      containers:
+        - name: data-processor
+          image: python:3.9-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting data processing job at $(date)"
+              echo "Input parameters: PARAMETERS"
+              echo "Installing required packages..."
+              pip install pandas numpy --quiet
+              
+              echo "Processing data..."
+              python -c '
+              import pandas as pd
+              import numpy as np
+              import time
+              import random
+              
+              # Simulate data processing
+              print("Generating sample data...")
+              data_size = 100000
+              data = pd.DataFrame({
+                  "id": range(data_size),
+                  "value": np.random.normal(100, 15, data_size),
+                  "category": np.random.choice(["A", "B", "C", "D"], data_size)
+              })
+              
+              print(f"Generated dataset with {len(data)} records")
+              print("Sample of data:")
+              print(data.head())
+              
+              print("\nPerforming data analysis...")
+              time.sleep(5)  # Simulate processing time
+              
+              # Calculate statistics
+              stats = data.groupby("category").agg({
+                  "value": ["mean", "std", "min", "max", "count"]
+              })
+              
+              print("\nAnalysis results:")
+              print(stats)
+              
+              # Simulate successful completion most of the time
+              if random.random() < 0.9:
+                  print("\nData processing completed successfully!")
+              else:
+                  print("\nSimulating a processing error!")
+                  exit(1)
+              '
+              
+              echo "Job completed at $(date)"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: OnFailure

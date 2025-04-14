@@ -1,0 +1,7 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: batch-priority
+value: 100  # Lower than default (1000)
+globalDefault: false
+description: "Priority class for batch jobs that can tolerate delays"
