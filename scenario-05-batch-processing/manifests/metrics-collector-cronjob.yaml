@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: metrics-collector
+spec:
+  schedule: "*/1 * * * *"  # Run every minute
+  concurrencyPolicy: Forbid  # Don't start a new job if previous still running
+  failedJobsHistoryLimit: 3  # Keep history of 3 failed jobs
+  successfulJobsHistoryLimit: 3  # Keep history of 3 successful jobs
+  startingDeadlineSeconds: 30  # Must start within 30 seconds of scheduled time
+  jobTemplate:
+    spec:
+      backoffLimit: 2  # Retry 2 times before marking as failed
+      template:
+        spec:
+          containers:
+            - name: metrics-collector
+              image: busybox
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  echo "Starting metrics collection job at $(date)"
+                  echo "Simulating data collection process..."
+                  sleep 10  # Simulate work being done
+                  echo "Collection completed successfully at $(date)"
+                  echo "Data points collected: $((RANDOM % 100 + 50))"
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "128Mi"
+                  cpu: "200m"
+          restartPolicy: OnFailure

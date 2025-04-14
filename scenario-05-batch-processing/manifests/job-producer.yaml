@@ -1,0 +1,137 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: job-producer
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      containers:
+        - name: producer
+          image: python:3.9-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting job producer..."
+              pip install pika --quiet
+              
+              python -c '
+              import pika
+              import json
+              import time
+              import random
+              import socket
+              
+              def is_rabbitmq_ready():
+                  """Check if RabbitMQ service is reachable"""
+                  try:
+                      # Try to resolve and connect to the RabbitMQ hostname
+                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      sock.settimeout(2)  # 2 second timeout
+                      sock.connect(("rabbitmq", 5672))
+                      sock.close()
+                      return True
+                  except Exception as e:
+                      print(f"RabbitMQ not yet reachable: {str(e)}")
+                      return False
+              
+              # Wait for RabbitMQ to be ready with progressive backoff
+              print("Waiting for RabbitMQ to be available...")
+              max_attempts = 15
+              attempt = 0
+              
+              while attempt < max_attempts:
+                  if is_rabbitmq_ready():
+                      print("RabbitMQ is now reachable!")
+                      break
+              
+                  wait_time = min(5 + attempt, 30)  # Progressive backoff, max 30 seconds
+                  print(f"Waiting {wait_time} seconds before retry {attempt+1}/{max_attempts}...")
+                  time.sleep(wait_time)
+                  attempt += 1
+              
+              if attempt == max_attempts:
+                  print("Max attempts reached. Could not connect to RabbitMQ.")
+                  exit(1)
+              
+              # Wait a bit more for RabbitMQ to initialize fully
+              print("Giving RabbitMQ a moment to initialize fully...")
+              time.sleep(5)
+              
+              # Connect to RabbitMQ with retry logic
+              connected = False
+              connection = None
+              channel = None
+              connect_attempts = 0
+              max_connect_attempts = 5
+              
+              while not connected and connect_attempts < max_connect_attempts:
+                  try:
+                      print(f"Attempting to connect to RabbitMQ (attempt {connect_attempts+1}/{max_connect_attempts})...")
+                      credentials = pika.PlainCredentials("user", "password")
+                      connection = pika.BlockingConnection(
+                          pika.ConnectionParameters(
+                              host="rabbitmq", 
+                              credentials=credentials,
+                              socket_timeout=10,
+                              connection_attempts=3,
+                              retry_delay=2
+                          )
+                      )
+                      channel = connection.channel()
+                      connected = True
+                      print("Successfully connected to RabbitMQ!")
+                  except Exception as e:
+                      print(f"Failed to connect: {str(e)}")
+                      if connect_attempts < max_connect_attempts - 1:
+                          wait_time = 5 * (connect_attempts + 1)  # Progressive backoff
+                          print(f"Waiting {wait_time} seconds before retry...")
+                          time.sleep(wait_time)
+                      connect_attempts += 1
+              
+              if not connected:
+                  print("Could not connect to RabbitMQ after multiple attempts.")
+                  exit(1)
+              
+              # Declare a queue
+              queue_name = "data_processing_tasks"
+              print(f"Declaring queue: {queue_name}")
+              channel.queue_declare(queue=queue_name, durable=True)
+              
+              # Generate and send 20 tasks
+              print("Generating tasks...")
+              for i in range(20):
+                  task_id = i + 1
+                  task = {
+                      "task_id": task_id,
+                      "type": random.choice(["analysis", "aggregation", "transformation"]),
+                      "priority": random.choice(["high", "medium", "low"]),
+                      "data_size": random.randint(100, 10000),
+                      "created_at": time.time()
+                  }
+              
+                  message = json.dumps(task)
+                  channel.basic_publish(
+                      exchange="",
+                      routing_key=queue_name,
+                      body=message,
+                      properties=pika.BasicProperties(
+                          delivery_mode=2,  # make message persistent
+                      )
+                  )
+                  print(f"Message sent to the queue: {i}")
+                  time.sleep(0.5)  # Small delay between tasks
+              
+              # Close the connection
+              connection.close()
+              print("All tasks have been sent to the queue!")
+              '
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      restartPolicy: OnFailure

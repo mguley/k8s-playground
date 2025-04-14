@@ -1,0 +1,203 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: task-worker
+  labels:
+    app: task-worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: task-worker
+  template:
+    metadata:
+      labels:
+        app: task-worker
+    spec:
+      containers:
+        - name: worker
+          image: python:3.9-alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting task worker..."
+              pip install pika --quiet
+              
+              python -c '
+              import pika
+              import json
+              import time
+              import random
+              import os
+              import sys
+              
+              # Force output to be unbuffered for real-time logs
+              sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, "reconfigure") else None
+              print = lambda *args, **kwargs: __builtins__.print(*args, **kwargs, flush=True)
+              
+              # Get worker ID from hostname
+              worker_id = os.environ.get("HOSTNAME", "unknown")
+              print(f"Worker {worker_id} starting up...")
+              
+              # Function to check if RabbitMQ is reachable
+              def is_rabbitmq_ready():
+                  try:
+                      import socket
+                      sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                      sock.settimeout(2)
+                      sock.connect(("rabbitmq", 5672))
+                      sock.close()
+                      return True
+                  except Exception as e:
+                      print(f"RabbitMQ not yet reachable: {str(e)}")
+                      return False
+              
+              # Wait for RabbitMQ to be ready with progressive backoff
+              print("Checking if RabbitMQ is available...")
+              max_attempts = 15
+              attempt = 0
+              
+              while attempt < max_attempts:
+                  if is_rabbitmq_ready():
+                      print("RabbitMQ is now reachable!")
+                      break
+              
+                  wait_time = min(5 + attempt, 20)  # Progressive backoff, max 20 seconds
+                  print(f"Waiting {wait_time} seconds before retry {attempt+1}/{max_attempts}...")
+                  time.sleep(wait_time)
+                  attempt += 1
+              
+              if attempt == max_attempts:
+                  print("Max attempts reached. Could not connect to RabbitMQ.")
+                  sys.exit(1)
+              
+              print("Giving RabbitMQ a moment to initialize fully...")
+              time.sleep(5)
+              
+              # Message processing function
+              def process_message(ch, method, properties, body):
+                  try:
+                      print(f"Received message: {body[:100]}...")  # Truncate long messages in log
+                      task = json.loads(body)
+                      task_id = task.get("task_id")
+                      task_type = task.get("type")
+                      priority = task.get("priority")
+                      data_size = task.get("data_size")
+              
+                      print(f"Worker {worker_id} processing task {task_id}: {task_type}, priority: {priority}")
+              
+                      # Simulate processing time based on data size and task type
+                      if task_type == "analysis":
+                          process_time = data_size / 1000
+                      elif task_type == "aggregation":
+                          process_time = data_size / 2000
+                      else:  # transformation
+                          process_time = data_size / 3000
+              
+                      # Add some randomness to processing time
+                      process_time = max(1, process_time * random.uniform(0.8, 1.2))
+              
+                      print(f"Task {task_id} will take approximately {process_time:.2f} seconds")
+              
+                      # Simulate the processing work
+                      time.sleep(process_time)
+              
+                      # Simulate occasional failures
+                      if random.random() < 0.1:
+                          print(f"Task {task_id} failed!")
+                          raise Exception("Simulated processing error")
+              
+                      print(f"Task {task_id} completed successfully!")
+              
+                      # Acknowledge the message
+                      ch.basic_ack(delivery_tag=method.delivery_tag)
+                  except Exception as e:
+                      print(f"Error processing task: {str(e)}")
+                      # Negative acknowledgment - return to queue
+                      ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                      # Small delay before retrying
+                      time.sleep(5)
+              
+              # Set up credentials
+              print("Setting up RabbitMQ credentials...")
+              credentials = pika.PlainCredentials("user", "password")
+              
+              # Connect to RabbitMQ with robust retry logic
+              connected = False
+              connect_attempts = 0
+              max_connect_attempts = 10
+              connection = None
+              channel = None
+              
+              print("Attempting to connect to RabbitMQ...")
+              while not connected and connect_attempts < max_connect_attempts:
+                  try:
+                      print(f"Connection attempt {connect_attempts+1}/{max_connect_attempts}...")
+                      connection_params = pika.ConnectionParameters(
+                          host="rabbitmq", 
+                          credentials=credentials,
+                          socket_timeout=10,
+                          connection_attempts=3,
+                          retry_delay=2
+                      )
+                      connection = pika.BlockingConnection(connection_params)
+                      channel = connection.channel()
+                      connected = True
+                      print("Successfully connected to RabbitMQ!")
+                  except Exception as e:
+                      connect_attempts += 1
+                      print(f"Failed to connect to RabbitMQ: {str(e)}")
+              
+                      if connect_attempts < max_connect_attempts:
+                          wait_time = min(5 * (connect_attempts + 1), 30)  # Progressive backoff
+                          print(f"Retrying in {wait_time} seconds...")
+                          time.sleep(wait_time)
+                      else:
+                          print("Max connection attempts reached. Exiting...")
+                          sys.exit(1)
+              
+              # Declare the queue
+              queue_name = "data_processing_tasks"
+              print(f"Declaring queue: {queue_name}")
+              channel.queue_declare(queue=queue_name, durable=True)
+              
+              # Check queue status
+              result = channel.queue_declare(queue=queue_name, durable=True, passive=True)
+              message_count = result.method.message_count
+              print(f"Queue {queue_name} has {message_count} messages waiting")
+              
+              # Set QoS prefetch
+              print("Setting QoS prefetch to 1...")
+              channel.basic_qos(prefetch_count=1)
+              
+              # Set up the consumer
+              print(f"Worker {worker_id} waiting for tasks...")
+              channel.basic_consume(queue=queue_name, on_message_callback=process_message)
+              
+              # Start consuming messages
+              print("Starting message consumption loop...")
+              try:
+                  channel.start_consuming()
+              except KeyboardInterrupt:
+                  print("Received keyboard interrupt. Shutting down...")
+              except Exception as e:
+                  print(f"Error in message consumption: {str(e)}")
+              finally:
+                  if channel is not None and channel.is_open:
+                      channel.stop_consuming()
+                  if connection is not None and connection.is_open:
+                      print("Closing connection...")
+                      connection.close()
+                      print("Connection closed.")
+              
+              print("Worker shutting down...")
+              '
+          resources:
+            requests:
+              memory: "192Mi"
+              cpu: "200m"
+            limits:
+              memory: "384Mi"
+              cpu: "400m"
+      restartPolicy: Always
